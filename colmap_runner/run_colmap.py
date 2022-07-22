@@ -8,14 +8,14 @@ from normalize_cam_dict import normalize_cam_dict
 #########################################################################
 
 def bash_run(cmd):
-    colmap_bin = '/home/zhangka2/code/colmap/build/__install__/bin/colmap'
-    cmd = colmap_bin + ' ' + cmd
+    colmap_bin = '/usr/local/bin/colmap'
+    cmd = [colmap_bin] + cmd
     print('\nRunning cmd: ', cmd)
 
-    subprocess.check_call(['/bin/bash', '-c', cmd])
+    subprocess.check_call(['/bin/bash', '-c', ' '.join(cmd)])
 
 
-gpu_index = '-1'
+gpu_index = '0'
 
 
 def run_sift_matching(img_dir, db_file, remove_exist=False):
@@ -26,25 +26,26 @@ def run_sift_matching(img_dir, db_file, remove_exist=False):
 
     # feature extraction
     # if there's no attached display, cannot use feature extractor with GPU
-    cmd = ' feature_extractor --database_path {} \
-                                    --image_path {} \
-                                    --ImageReader.single_camera 1 \
-                                    --ImageReader.camera_model SIMPLE_RADIAL \
-                                    --SiftExtraction.max_image_size 5000  \
-                                    --SiftExtraction.estimate_affine_shape 0 \
-                                    --SiftExtraction.domain_size_pooling 1 \
-                                    --SiftExtraction.use_gpu 1 \
-                                    --SiftExtraction.max_num_features 16384 \
-                                    --SiftExtraction.gpu_index {}'.format(db_file, img_dir, gpu_index)
+    cmd = ['feature_extractor', '--database_path', db_file,
+                                '--image_path', img_dir,
+                                '--ImageReader.single_camera', '1',
+                                '--ImageReader.camera_model SIMPLE_RADIAL',
+                                '--SiftExtraction.max_image_size', '5000',
+                                '--SiftExtraction.estimate_affine_shape', '0',
+                                '--SiftExtraction.domain_size_pooling', '1',
+                                '--SiftExtraction.use_gpu', '1',
+                                '--SiftExtraction.max_num_features', '16384',
+                                '--SiftExtraction.gpu_index', gpu_index]
+
     bash_run(cmd)
 
     # feature matching
-    cmd = ' exhaustive_matcher --database_path {} \
-                                     --SiftMatching.guided_matching 1 \
-                                     --SiftMatching.use_gpu 1 \
-                                     --SiftMatching.max_num_matches 65536 \
-                                     --SiftMatching.max_error 3 \
-                                     --SiftMatching.gpu_index {}'.format(db_file, gpu_index)
+    cmd = ['exhaustive_matcher', '--database_path', db_file,
+                                 '--SiftMatching.guided_matching', '1',
+                                 '--SiftMatching.use_gpu', '1',
+                                 '--SiftMatching.max_num_matches', '65536',
+                                 '--SiftMatching.max_error', '3',
+                                 '--SiftMatching.gpu_index', gpu_index]
 
     bash_run(cmd)
 
@@ -52,12 +53,11 @@ def run_sift_matching(img_dir, db_file, remove_exist=False):
 def run_sfm(img_dir, db_file, out_dir):
     print('Running SfM...')
 
-    cmd = ' mapper \
-            --database_path {} \
-            --image_path {} \
-            --output_path {} \
-            --Mapper.tri_min_angle 3.0 \
-            --Mapper.filter_min_tri_angle 3.0'.format(db_file, img_dir, out_dir)
+    cmd = ['mapper', '--database_path', db_file,
+                     '--image_path', img_dir,
+                     '--output_path', out_dir,
+                     '--Mapper.tri_min_angle', '3.0',
+                     '--Mapper.filter_min_tri_angle', '3.0']
  
     bash_run(cmd)
 
@@ -65,12 +65,11 @@ def run_sfm(img_dir, db_file, out_dir):
 def prepare_mvs(img_dir, sparse_dir, mvs_dir):
     print('Preparing for MVS...')
 
-    cmd = ' image_undistorter \
-            --image_path {} \
-            --input_path {} \
-            --output_path {} \
-            --output_type COLMAP \
-            --max_image_size 2000'.format(img_dir, sparse_dir, mvs_dir)
+    cmd = ['image_undistorter', '--image_path', img_dir,
+                                '--input_path', sparse_dir,
+                                '--output_path', mvs_dir,
+                                '--output_type', 'COLMAP',
+                                '--max_image_size', '2000']
 
     bash_run(cmd)
 
@@ -78,15 +77,14 @@ def prepare_mvs(img_dir, sparse_dir, mvs_dir):
 def run_photometric_mvs(mvs_dir, window_radius):
     print('Running photometric MVS...')
 
-    cmd = ' patch_match_stereo --workspace_path {} \
-                    --PatchMatchStereo.window_radius {} \
-                    --PatchMatchStereo.min_triangulation_angle 3.0 \
-                    --PatchMatchStereo.filter 1 \
-                    --PatchMatchStereo.geom_consistency 1 \
-                    --PatchMatchStereo.gpu_index={} \
-                    --PatchMatchStereo.num_samples 15 \
-                    --PatchMatchStereo.num_iterations 12'.format(mvs_dir,
-                                                                 window_radius, gpu_index)
+    cmd = ['patch_match_stereo', '--workspace_path', mvs_dir,
+                                 '--PatchMatchStereo.window_radius', window_radius,
+                                 '--PatchMatchStereo.min_triangulation_angle', '3.0',
+                                 '--PatchMatchStereo.filter', '1',
+                                 '--PatchMatchStereo.geom_consistency', '1',
+                                 '--PatchMatchStereo.gpu_index', gpu_index,
+                                 '--PatchMatchStereo.num_samples', '15',
+                                 '--PatchMatchStereo.num_iterations', '12']
 
     bash_run(cmd)
 
@@ -94,9 +92,9 @@ def run_photometric_mvs(mvs_dir, window_radius):
 def run_fuse(mvs_dir, out_ply):
     print('Running depth fusion...')
 
-    cmd = ' stereo_fusion --workspace_path {} \
-                         --output_path {} \
-                         --input_type geometric'.format(mvs_dir, out_ply)
+    cmd = ['stereo_fusion', '--workspace_path', mvs_dir,
+                            '--output_path', out_ply,
+                            '--input_type', 'geometric']
     
     bash_run(cmd)
 
@@ -104,10 +102,9 @@ def run_fuse(mvs_dir, out_ply):
 def run_possion_mesher(in_ply, out_ply, trim):
     print('Running possion mesher...')
 
-    cmd = ' poisson_mesher \
-            --input_path {} \
-            --output_path {} \
-            --PoissonMeshing.trim {}'.format(in_ply, out_ply, trim)
+    cmd = ['poisson_mesher', '--input_path', in_ply,
+                             '--output_path', out_ply,
+                             '--PoissonMeshing.trim', trim]
 
     bash_run(cmd)
 
@@ -133,7 +130,7 @@ def main(img_dir, out_dir, run_mvs=False):
     # undistort images
     mvs_dir = os.path.join(out_dir, 'mvs')
     os.makedirs(mvs_dir, exist_ok=True)
-    prepare_mvs(img_dir, sparse_dir, mvs_dir)
+    prepare_mvs(img_dir, os.path.join(sparse_dir, '0'), mvs_dir)
 
     # extract camera parameters and undistorted images
     os.makedirs(os.path.join(out_dir, 'posed_images'), exist_ok=True)
@@ -161,8 +158,8 @@ def main(img_dir, out_dir, run_mvs=False):
 if __name__ == '__main__':
     ### note: this script is intended for the case where all images are taken by the same camera, i.e., intrinisics are shared.
     
-    img_dir = ''
-    out_dir = ''
+    img_dir = '/Documents/data/Real_data0720/images/'
+    out_dir = '/Documents/data/Real_data0720/colmap_nerfplusplus'
     run_mvs = False
     main(img_dir, out_dir, run_mvs=run_mvs)
 
